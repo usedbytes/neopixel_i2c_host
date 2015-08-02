@@ -91,7 +91,8 @@ static void colors_to_array(uint8_t *buf, uint32_t *colors, size_t n)
 
 static int send_msg(int fd, struct i2c_msg *msg)
 {
-	int res = ioctl(fd, I2C_RDWR, msg);
+	struct i2c_rdwr_ioctl_data arg = { msg, 1 };
+	int res = ioctl(fd, I2C_RDWR, &arg);
 	if (res != 1) {
 		fprintf(stderr, "ioctl returned %d (%s)\n", res, strerror(errno));
 		return -1;
