@@ -17,7 +17,7 @@
 struct led_ctx;
 
 struct led_ctx *init_leds(uint8_t device_no, uint8_t addr, size_t n_leds);
-int exit_leds(struct led_ctx *ctx, bool reset);
+int exit_leds(struct led_ctx *ctx);
 
 int set_leds(struct led_ctx *ctx, uint32_t *colors, size_t n_leds);
 int set_leds_global(struct led_ctx *ctx, uint32_t color);

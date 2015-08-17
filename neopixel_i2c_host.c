@@ -50,11 +50,6 @@ struct led_ctx *init_leds(uint8_t device_no, uint8_t addr, size_t n_leds)
 		goto fail;
 	}
 
-	if (reset_leds(ctx)) {
-		fprintf(stderr, "Couldn't reset LEDs\n");
-		goto fail;
-	}
-
 	return ctx;
 
 fail:
@@ -64,12 +59,9 @@ fail:
 	return NULL;
 }
 
-int exit_leds(struct led_ctx *ctx, bool reset)
+int exit_leds(struct led_ctx *ctx)
 {
 	int res = 0;
-
-	if (reset)
-		res = reset_leds(ctx);
 
 	close(ctx->fd);
 	free(ctx);
