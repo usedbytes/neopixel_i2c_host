@@ -1,6 +1,6 @@
 
 TARGET := a.out
-SRC := main.c neopixel_i2c_host.c pcm.c
+SRC := main.c control.c neopixel_i2c_host.c pcm.c
 OBJS = $(patsubst %.c,%.o,$(SRC))
 
 CFLAGS = -Wall -g
