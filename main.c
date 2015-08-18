@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "brightness.h"
+#include "control.h"
 #include "neopixel_i2c_host.h"
 #include "pcm.h"
 
@@ -18,8 +19,9 @@
 
 #define IDLE_LEVEL 64
 
-void startup(struct led_ctx *ctx)
+int startup_func(struct ctrl_ctx *ctrl_ctx, struct arg_list *args)
 {
+	struct led_ctx *led_ctx;
 	const struct timespec frame_duration = {
 		.tv_sec = 0,
 		.tv_nsec = 16666667,
@@ -30,11 +32,15 @@ void startup(struct led_ctx *ctx)
 	uint32_t color;
 	uint8_t brightness;
 
+	led_ctx = init_leds(DEVICENO, ADDR, N_LEDS);
+	if (!led_ctx)
+		return -1;
+
 	for (level = IDLE_LEVEL; level <= 255; level += brightness_step) {
 		brightness = linear_map[level];
 
 		color = COLOR(brightness, 0, 0);
-		set_leds_global(ctx, color);
+		set_leds_global(led_ctx, color);
 		nanosleep(&frame_duration, NULL);
 	}
 
@@ -44,22 +50,36 @@ void startup(struct led_ctx *ctx)
 		brightness = linear_map[level];
 
 		color = COLOR(brightness, 0, 0);
-		set_leds_global(ctx, color);
+		set_leds_global(led_ctx, color);
 		nanosleep(&frame_duration, NULL);
 	}
+
+	exit_leds(led_ctx);
+
+	/* Wait on idle level forever */
+	return !control_check_for_update(ctrl_ctx, -1);
 }
 
-int main(int argc, char *argv[])
+int audio_func(struct ctrl_ctx *ctrl_ctx, struct arg_list *args)
 {
+	struct pcm_ctx *pcm_ctx;
+	struct led_ctx *led_ctx;
 	int last_mean = 0;
 	int mean;
 	int level;
 	uint32_t color;
-	struct led_ctx *led_ctx = init_leds(DEVICENO, ADDR, N_LEDS);
-	struct pcm_ctx *pcm_ctx = pcm_init(PCM_DEV, PCM_FORMAT, PCM_RATE);
-	startup(led_ctx);
 
-	for (;;) {
+	pcm_ctx = pcm_init(PCM_DEV, PCM_FORMAT, PCM_RATE);
+	if (!pcm_ctx)
+		return -1;
+
+	led_ctx = init_leds(DEVICENO, ADDR, N_LEDS);
+	if (!led_ctx) {
+		pcm_exit(pcm_ctx);
+		return -1;
+	}
+
+	while (1) {
 		mean = pcm_get_level(pcm_ctx, 1024);
 		level = (mean + last_mean) / 256;
 		last_mean = mean;
@@ -68,8 +88,55 @@ int main(int argc, char *argv[])
 
 		color = COLOR(linear_map[level], 0, 0);
 		set_leds_global(led_ctx, color);
+
+		if (control_check_for_update(ctrl_ctx, 0))
+			break;
 	}
 
+	exit_leds(led_ctx);
+	pcm_exit(pcm_ctx);
+
+	return 0;
+}
+
+int exit_func(struct ctrl_ctx *ctx, struct arg_list *args)
+{
+	return -1;
+}
+
+int main(int argc, char *argv[])
+{
+	int i;
+	struct ctrl_ctx *ctrl_ctx;
+	struct mode modes[] = {
+		{
+			.name = "startup",
+			.func = startup_func,
+		},
+		{
+			.name = "audio",
+			.func = audio_func,
+		},
+		{
+			.name = "exit",
+			.func = exit_func,
+		},
+
+	};
+
+	ctrl_ctx = control_init();
+	if (!ctrl_ctx)
+		return 1;
+
+	for (i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
+		if (control_register_mode(ctrl_ctx, &modes[i]))
+			goto exit;
+	}
+
+	control_loop(ctrl_ctx, "startup");
+
+exit:
+	control_exit(ctrl_ctx);
 	return 0;
 }
 
