@@ -151,31 +151,34 @@ static int handle_input(struct ctrl_ctx *ctx, struct pollfd *fd)
 bool control_check_for_update(struct ctrl_ctx *ctx, int timeout)
 {
 	int i;
-	int ret = poll(ctx->fds, ctx->nfds, timeout);
-	if (ret == 0)
-		return false;
+	bool update = false;
 
-	if (ret < 0) {
-		/* FIXME */
-		fprintf(stderr, "Poll went wrong.\n");
-		return false;
-	}
-
-	for (i = 0; i < ctx->nfds; i++) {
-		struct pollfd *fd = &ctx->fds[i];
-		if (fd->revents & POLLHUP) {
+	do {
+		int ret = poll(ctx->fds, ctx->nfds, timeout);
+		if (ret < 0) {
 			/* FIXME */
-			fprintf(stderr, "fd %i HUP\n", i);
+			fprintf(stderr, "Poll went wrong.\n");
+		} else {
+			for (i = 0; i < ctx->nfds; i++) {
+				struct pollfd *fd = &ctx->fds[i];
+				if (fd->revents & POLLHUP) {
+					/* FIXME */
+					fprintf(stderr, "fd %i HUP\n", i);
+				}
+				if (fd->revents & POLLIN) {
+					ret = handle_input(ctx, fd);
+					if (ret > 0)
+						update = true;
+					/*
+					 * TODO: Handle multiple fds (still need to drain them
+					 * all)
+					 */
+				}
+			}
 		}
-		if (fd->revents & POLLIN) {
-			ret = handle_input(ctx, fd);
-			if (ret > 0)
-				return true;
-			/* TODO: Handle multiple fds (still need to drain them all) */
-		}
-	}
+	} while (!update && (timeout < 0));
 
-	return false;
+	return update;
 }
 
 int control_loop(struct ctrl_ctx *ctx, const char *init_cmd)
