@@ -83,6 +83,38 @@ int startup_func(struct ctrl_ctx *ctrl_ctx, struct arg_list *args)
 	return !control_check_for_update(ctrl_ctx, -1);
 }
 
+int off_func(struct ctrl_ctx *ctrl_ctx, struct arg_list *args)
+{
+	struct led_ctx *led_ctx;
+	const struct timespec frame_duration = {
+		.tv_sec = 0,
+		.tv_nsec = 16666667,
+	};
+	const int n_frames = 30;
+	const int brightness_step = IDLE_LEVEL / n_frames;
+	int level = IDLE_LEVEL;
+	uint32_t color;
+	uint8_t brightness;
+
+	led_ctx = init_leds(DEVICENO, ADDR, N_LEDS);
+	if (!led_ctx)
+		return -1;
+
+	for (level = IDLE_LEVEL; level >= 0; level -= brightness_step) {
+		brightness = linear_map[level];
+
+		color = COLOR(brightness, 0, 0);
+		set_leds_global(led_ctx, color);
+		nanosleep(&frame_duration, NULL);
+	}
+
+	exit_leds(led_ctx);
+
+	/* Wait on idle level forever */
+	return !control_check_for_update(ctrl_ctx, -1);
+}
+
+
 int audio_func(struct ctrl_ctx *ctrl_ctx, struct arg_list *args)
 {
 	struct pcm_ctx *pcm_ctx;
@@ -139,6 +171,10 @@ int main(int argc, char *argv[])
 		{
 			.name = "audio",
 			.func = audio_func,
+		},
+		{
+			.name = "off",
+			.func = off_func,
 		},
 		{
 			.name = "exit",
